@@ -4,22 +4,17 @@ import { cookies } from "next/headers";
 export async function createClient() {
   const cookieStore = await cookies();
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder";
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    // Return a dummy client or throw a more helpful error that won't crash build
-    // In many Next.js build scenarios, variables are missing during static generation
-    return createServerClient(
-      supabaseUrl || "https://placeholder.supabase.co",
-      supabaseAnonKey || "placeholder",
-      {
-        cookies: {
-          getAll() { return []; },
-          setAll() {},
-        },
-      }
-    );
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    // Return a dummy client during build to prevent crashing
+    return createServerClient(supabaseUrl, supabaseAnonKey, {
+      cookies: {
+        getAll() { return []; },
+        setAll() {},
+      },
+    });
   }
 
   return createServerClient(supabaseUrl, supabaseAnonKey, {

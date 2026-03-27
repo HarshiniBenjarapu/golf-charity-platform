@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
+export const dynamic = 'force-dynamic';
 import { createClient } from "@supabase/supabase-js";
 
 // Ensure you define these in your .env.local file
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ""; // Use service role for backend logic
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "placeholder"; 
 
-// Create a Supabase client with the service role key to bypass RLS if doing admin operations,
-// or use @supabase/ssr in production to execute on behalf of the signed-in user.
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function POST(request: Request) {

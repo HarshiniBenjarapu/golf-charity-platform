@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+export const dynamic = 'force-dynamic';
 import { createClient } from "@/utils/supabase/server";
 
 // POST /api/draws/simulate — picks 5 winning numbers from real user scores
