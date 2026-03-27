@@ -3,7 +3,7 @@ import Stripe from "stripe";
 import { createClient } from "@/utils/supabase/server";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-02-24.acacia",
+  apiVersion: "2026-03-25.dahlia" as any,
 });
 
 // This must be raw body for Stripe signature verification
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
 
   // Handle checkout completed → activate subscription in DB
   if (event.type === "checkout.session.completed") {
-    const session = event.data.object as Stripe.CheckoutSession;
+    const session = event.data.object as Stripe.Checkout.Session;
     const userId = session.client_reference_id;
 
     if (userId) {
