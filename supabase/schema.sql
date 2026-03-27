@@ -63,3 +63,50 @@ CREATE TRIGGER trg_limit_user_scores
     AFTER INSERT ON public.scores
     FOR EACH ROW
     EXECUTE FUNCTION enforce_max_scores_per_user();
+
+-- Enable RLS on all tables
+ALTER TABLE public.charities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.scores ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.draws ENABLE ROW LEVEL SECURITY;
+
+-- 1. Charities: Everyone can read
+CREATE POLICY "Public charities are viewable by everyone" 
+ON public.charities FOR SELECT USING (true);
+
+-- 2. Profiles: Users can read/write their own
+CREATE POLICY "Users can view own profile" 
+ON public.profiles FOR SELECT USING (auth.uid() = id);
+
+CREATE POLICY "Users can update own profile" 
+ON public.profiles FOR UPDATE USING (auth.uid() = id);
+
+-- 3. Scores: Users can read/write their own
+CREATE POLICY "Users can view own scores" 
+ON public.scores FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own scores" 
+ON public.scores FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own scores" 
+ON public.scores FOR DELETE USING (auth.uid() = user_id);
+
+-- 4. Draws: Everyone can read published
+CREATE POLICY "Published draws are viewable by everyone" 
+ON public.draws FOR SELECT USING (status = 'published');
+
+-- Profile Synchronization Trigger
+-- This function creates a profile entry when a new user signs up in auth.users
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.profiles (id, email, full_name)
+    VALUES (NEW.id, NEW.email, NEW.raw_user_meta_data->>'full_name');
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER on_auth_user_created
+    AFTER INSERT ON auth.users
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_new_user();
