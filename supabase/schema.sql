@@ -37,6 +37,11 @@ CREATE TABLE public.draws (
     month DATE NOT NULL, -- e.g. 2026-03-01 for March 2026
     winning_numbers INTEGER[] NOT NULL,
     status draw_status_enum DEFAULT 'simulated',
+    prize_pool NUMERIC DEFAULT 0,
+    match_5_pool NUMERIC DEFAULT 0,
+    match_4_pool NUMERIC DEFAULT 0,
+    match_3_pool NUMERIC DEFAULT 0,
+    rollover_from_previous NUMERIC DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()) NOT NULL
 );
 
@@ -110,3 +115,34 @@ CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
     FOR EACH ROW
     EXECUTE FUNCTION public.handle_new_user();
+
+-- 5. Winners Table (for PRD verification flow)
+CREATE TABLE public.winners (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    draw_id UUID REFERENCES public.draws(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    match_type INTEGER CHECK (match_type IN (3, 4, 5)) NOT NULL,
+    prize_amount NUMERIC NOT NULL,
+    proof_url TEXT,
+    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'paid')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()) NOT NULL
+);
+
+ALTER TABLE public.winners ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own winnings" 
+ON public.winners FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own winners proof" 
+ON public.winners FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Admins can manage all winners" 
+ON public.winners FOR ALL USING (
+    EXISTS (
+        SELECT 1 FROM public.profiles 
+        WHERE id = auth.uid() AND role = 'admin'
+    )
+);
+
+-- Add role to profiles if not exists
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user';

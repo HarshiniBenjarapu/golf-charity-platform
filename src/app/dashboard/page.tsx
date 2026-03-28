@@ -19,8 +19,8 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // Parallel fetch: profile + scores + latest draws
-  const [{ data: profile }, { data: scores }, { data: draws }] = await Promise.all([
+  // Parallel fetch: profile + scores + latest draws + winnings
+  const [{ data: profile }, { data: scores }, { data: draws }, { data: winnings }] = await Promise.all([
     supabase
       .from("profiles")
       .select("*, charities(name, description)")
@@ -38,6 +38,11 @@ export default async function DashboardPage() {
       .eq("status", "published")
       .order("created_at", { ascending: false })
       .limit(3),
+    supabase
+      .from("winners")
+      .select("*, draws(month)")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false }),
   ]);
 
   const charity = profile?.charities as { name: string; description: string } | null;
@@ -165,6 +170,77 @@ export default async function DashboardPage() {
               </Link>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* PRD: Your Winnings & Verification Section */}
+      <div className="relative p-6 rounded-3xl bg-zinc-900 border border-zinc-800 shadow-xl overflow-hidden">
+        <div className="absolute top-0 right-0 p-32 bg-violet-500/5 blur-[100px] rounded-full pointer-events-none" />
+        <div className="relative z-10">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-violet-500/10 border border-violet-500/20">
+                <Trophy size={20} className="text-violet-400" />
+              </div>
+              <h2 className="font-semibold text-xl text-zinc-100">Your Winnings</h2>
+            </div>
+            {winnings && winnings.length > 0 && (
+              <div className="text-sm font-bold text-violet-400">
+                Total Won: ${winnings.reduce((acc, w) => acc + Number(w.prize_amount), 0).toFixed(2)}
+              </div>
+            )}
+          </div>
+
+          {winnings && winnings.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-zinc-800">
+                    <th className="pb-4 text-xs font-bold uppercase tracking-wider text-zinc-500">Draw Month</th>
+                    <th className="pb-4 text-xs font-bold uppercase tracking-wider text-zinc-500">Match</th>
+                    <th className="pb-4 text-xs font-bold uppercase tracking-wider text-zinc-500">Prize</th>
+                    <th className="pb-4 text-xs font-bold uppercase tracking-wider text-zinc-500">Status</th>
+                    <th className="pb-4 text-xs font-bold uppercase tracking-wider text-zinc-500">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800/50">
+                  {winnings.map((win) => {
+                    const month = new Date((win.draws as any)?.month).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+                    return (
+                      <tr key={win.id} className="group hover:bg-white/[0.02] transition-colors">
+                        <td className="py-4 text-sm text-zinc-300">{month}</td>
+                        <td className="py-4 text-sm font-bold text-white">{win.match_type}-Match</td>
+                        <td className="py-4 text-sm font-bold text-emerald-400">${Number(win.prize_amount).toFixed(2)}</td>
+                        <td className="py-4">
+                          <span className={`px-2 py-1 rounded-md text-[10px] uppercase font-bold border ${
+                            win.status === 'approved' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                            win.status === 'rejected' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
+                            win.status === 'paid' ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' :
+                            'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                          }`}>
+                            {win.status}
+                          </span>
+                        </td>
+                        <td className="py-4">
+                          {win.status === 'pending' && !win.proof_url && (
+                            <Link href={`/winnings/${win.id}`} className="text-xs font-bold text-violet-400 hover:text-white transition-colors underline underline-offset-4">
+                              Upload Proof
+                            </Link>
+                          )}
+                          {win.proof_url && <span className="text-xs text-zinc-500 italic">Proof Submitted</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-8 rounded-2xl border border-dashed border-zinc-800 gap-2">
+              <Trophy size={24} className="text-zinc-700" />
+              <p className="text-zinc-500 text-sm">No winnings yet. Enter your scores to join the next draw!</p>
+            </div>
+          )}
         </div>
       </div>
 

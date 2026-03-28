@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   Dices, 
   Megaphone, 
@@ -9,28 +9,57 @@ import {
   CheckCircle2,
   XCircle,
   MoreVertical,
-  Ticket
+  Ticket,
+  Trophy,
+  HeartHandshake,
+  Loader2,
+  Image as ImageIcon
 } from "lucide-react";
-
-// Mock data
-const mockUsers = [
-  { id: 1, name: "Eleanor Shellstrop", email: "eleanor@goodplace.com", status: "Active", charity: "Oceans Tomorrow", joined: "Jan 12, 2026" },
-  { id: 2, name: "Chidi Anagonye", email: "chidi@ethics.edu", status: "Inactive", charity: "Global Read", joined: "Feb 04, 2026" },
-  { id: 3, name: "Tahani Al-Jamil", email: "tahani@highsociety.uk", status: "Active", charity: "Oceans Tomorrow", joined: "Mar 15, 2026" },
-  { id: 4, name: "Jason Mendoza", email: "jason@jaguars.com", status: "Active", charity: "Wildlife Fund", joined: "Jan 28, 2026" },
-  { id: 5, name: "Michael", email: "michael@architects.inc", status: "Inactive", charity: "Global Read", joined: "Nov 02, 2025" },
-];
+import { createClient } from "@/utils/supabase/client";
 
 export default function AdminDashboardPage() {
+  const supabase = createClient();
   const [isSimulating, setIsSimulating] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishSuccess, setPublishSuccess] = useState(false);
   const [simulationResults, setSimulationResults] = useState<{
-    numbers: number[];
+    winning_numbers: number[];
     winners: { match5: number; match4: number; match3: number };
+    prize_pools: any;
+    individual_prizes: any;
     total_users_checked: number;
   } | null>(null);
-  
+
+  const [activeTab, setActiveTab] = useState<"draws" | "users" | "winners" | "charities">("draws");
+  const [users, setUsers] = useState<any[]>([]);
+  const [winners, setWinners] = useState<any[]>([]);
+  const [charities, setCharities] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchAdminData();
+  }, [activeTab]);
+
+  const fetchAdminData = async () => {
+    setIsLoading(true);
+    try {
+      if (activeTab === "users") {
+        const { data } = await supabase.from("profiles").select("*, charities(name)").order("created_at", { ascending: false });
+        setUsers(data || []);
+      } else if (activeTab === "winners") {
+        const { data } = await supabase.from("winners").select("*, profiles(full_name, email), draws(month)").order("created_at", { ascending: false });
+        setWinners(data || []);
+      } else if (activeTab === "charities") {
+        const { data } = await supabase.from("charities").select("*").order("name");
+        setCharities(data || []);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSimulateDraw = async () => {
     setIsSimulating(true);
     setSimulationResults(null);
@@ -42,13 +71,9 @@ export default function AdminDashboardPage() {
         body: JSON.stringify({ action: "simulate" }),
       });
       const data = await res.json();
-      setSimulationResults({
-        numbers: data.winning_numbers,
-        winners: data.winners,
-        total_users_checked: data.total_users_checked,
-      });
+      setSimulationResults(data);
     } catch {
-      alert("Simulation failed. Please try again.");
+      alert("Simulation failed.");
     } finally {
       setIsSimulating(false);
     }
@@ -61,188 +86,248 @@ export default function AdminDashboardPage() {
       const res = await fetch("/api/draws", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "publish", winning_numbers: simulationResults.numbers }),
+        body: JSON.stringify({ action: "publish", ...simulationResults }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setPublishSuccess(true);
       setSimulationResults(null);
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Publish failed.");
+    } catch (e: any) {
+      alert(e.message);
     } finally {
       setIsPublishing(false);
     }
   };
 
+  const handleUpdateWinnerStatus = async (id: string, status: string) => {
+    const { error } = await supabase.from("winners").update({ status }).eq("id", id);
+    if (!error) fetchAdminData();
+  };
+
   return (
-    <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-700">
+    <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-700 pb-20">
       
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div className="flex flex-col gap-2">
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white mb-2">
-            Administrator
-          </h1>
-          <p className="text-zinc-400">
-            Manage upcoming draws and view subscriber metrics.
-          </p>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white mb-2">Platform Admin</h1>
+          <p className="text-zinc-400">Complete control over draws, users, and charity operations.</p>
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-8">
-        
-        {/* Draw Management Section */}
-        <div className="lg:col-span-1 space-y-6">
-          <div className="p-6 rounded-3xl bg-zinc-900 border border-zinc-800 shadow-xl overflow-hidden relative group">
-            <div className="absolute top-0 right-0 p-32 bg-violet-600/10 blur-[100px] rounded-full point-events-none" />
-            
-            <div className="relative z-10">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2.5 rounded-xl bg-violet-500/10 border border-violet-500/20">
-                  <Ticket size={20} className="text-violet-400" />
-                </div>
-                <h2 className="font-semibold text-xl text-zinc-100 tracking-wide">Draw Management</h2>
-              </div>
+      {/* Tabs */}
+      <div className="flex items-center gap-1 p-1 bg-zinc-900 border border-zinc-800 rounded-2xl w-fit">
+        {[
+          { id: "draws", label: "Draws", icon: Ticket },
+          { id: "winners", label: "Winner Verification", icon: Trophy },
+          { id: "users", label: "Subscribers", icon: Users },
+          { id: "charities", label: "Charities", icon: HeartHandshake },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all ${
+              activeTab === tab.id 
+                ? "bg-violet-600 text-white shadow-lg shadow-violet-600/20" 
+                : "text-zinc-400 hover:text-white hover:bg-zinc-800"
+            }`}
+          >
+            <tab.icon size={16} />
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-              <div className="p-4 rounded-2xl bg-black/50 border border-zinc-800/50 mb-6">
-                <p className="text-sm text-zinc-500 font-medium mb-1">Current Period</p>
-                <div className="flex items-center justify-between">
-                  <p className="text-lg font-bold text-white tracking-tight">March 2026</p>
-                  <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">Pending</span>
-                </div>
-              </div>
-
-              {/* Simulation Results Area */}
-              {publishSuccess && (
-                <div className="mb-6 p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5 text-center">
-                  <p className="text-emerald-400 font-semibold">✅ Draw Published Successfully!</p>
-                </div>
-              )}
-              {simulationResults && (
-                <div className="mb-6 p-4 rounded-xl border border-violet-500/20 bg-violet-500/5 animate-in slide-in-from-top-4 duration-500">
-                  <p className="text-xs text-violet-300 uppercase tracking-wider font-semibold mb-3">Simulated Results</p>
-                  <div className="flex gap-2 justify-center mb-4">
-                    {simulationResults.numbers.map((num, i) => (
-                      <div key={i} className="w-10 h-10 flex items-center justify-center rounded-full bg-zinc-950 border border-zinc-700 text-white font-bold shadow-inner">
-                        {num}
-                      </div>
-                    ))}
+      <div className="grid gap-8">
+        {/* TAB: DRAWS */}
+        {activeTab === "draws" && (
+           <div className="grid lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-1 p-6 rounded-3xl bg-zinc-900 border border-zinc-800 shadow-xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-32 bg-violet-600/10 blur-[100px] rounded-full pointer-events-none" />
+                <div className="relative z-10">
+                  <h2 className="text-xl font-bold mb-6">Execution Engine</h2>
+                  {publishSuccess && (
+                    <div className="mb-6 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-center font-bold">
+                      Draw Published Successfully!
+                    </div>
+                  )}
+                  <div className="space-y-4">
+                    <button 
+                      onClick={handleSimulateDraw}
+                      disabled={isSimulating}
+                      className="w-full py-4 bg-zinc-800 hover:bg-zinc-700 text-white rounded-2xl font-bold flex items-center justify-center gap-2 border border-zinc-700 transition-all"
+                    >
+                      {isSimulating && <Loader2 className="animate-spin" />}
+                      Simulate Monthly Draw
+                    </button>
+                    <button 
+                      onClick={handlePublish}
+                      disabled={!simulationResults || isPublishing}
+                      className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-30"
+                    >
+                      {isPublishing && <Loader2 className="animate-spin" />}
+                      Publish Results
+                    </button>
                   </div>
-                  <p className="text-center text-sm text-zinc-300">
-                    Match-5: <span className="font-bold text-emerald-400">{simulationResults.winners.match5}</span> &nbsp;|
-                    Match-4: <span className="font-bold text-sky-400">{simulationResults.winners.match4}</span> &nbsp;|
-                    Match-3: <span className="font-bold text-amber-400">{simulationResults.winners.match3}</span>
-                  </p>
-                  <p className="text-xs text-zinc-600 text-center mt-2">{simulationResults.total_users_checked} users checked</p>
                 </div>
-              )}
-
-              {/* Action Buttons */}
-              <div className="space-y-3 pt-2">
-                <button 
-                  onClick={handleSimulateDraw}
-                  disabled={isSimulating}
-                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-medium text-violet-300 bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/30 transition-all focus:ring-2 focus:ring-violet-500/40 disabled:opacity-50 disabled:cursor-not-allowed group"
-                >
-                  <Dices size={18} className={isSimulating ? "animate-spin" : "group-hover:-translate-y-0.5 transition-transform"} />
-                  {isSimulating ? "Simulating..." : "Simulate Draw"}
-                </button>
-                
-                <button 
-                  onClick={handlePublish}
-                  disabled={!simulationResults || isPublishing}
-                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-medium text-black bg-emerald-500 hover:bg-emerald-400 transition-all disabled:opacity-50 disabled:bg-zinc-800 disabled:text-zinc-500 shadow-[0_0_15px_rgba(16,185,129,0.2)] focus:ring-2 focus:ring-emerald-500/40 group relative overflow-hidden"
-                >
-                  {simulationResults && <div className="absolute inset-0 bg-white/20 w-full animate-[shimmer_2s_infinite]" />}
-                  <Megaphone size={18} className={`relative z-10 ${simulationResults ? "group-hover:scale-110" : ""} transition-transform`} />
-                  <span className="relative z-10">{isPublishing ? "Publishing..." : "Publish Results"}</span>
-                </button>
               </div>
-            </div>
-          </div>
-        </div>
 
-        {/* Users & Subs Table Section */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="p-6 rounded-3xl bg-zinc-900 border border-zinc-800 shadow-xl overflow-hidden relative">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20">
-                  <Users size={20} className="text-blue-400" />
-                </div>
-                <h2 className="font-semibold text-xl text-zinc-100 tracking-wide">Subscribers Directory</h2>
-              </div>
-              
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-zinc-500">
-                  <Search size={16} />
-                </div>
-                <input
-                  type="text"
-                  className="block w-full sm:w-64 p-2 pl-9 text-sm bg-black/50 border border-zinc-800 rounded-xl focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-white placeholder-zinc-500 transition-all shadow-inner"
-                  placeholder="Search users..."
-                />
-              </div>
-            </div>
-
-            <div className="overflow-x-auto rounded-xl border border-zinc-800/50 bg-black/20">
-              <table className="w-full text-sm text-left text-zinc-400">
-                <thead className="text-xs text-zinc-500 uppercase bg-zinc-950/50 border-b border-zinc-800/50">
-                  <tr>
-                    <th scope="col" className="px-6 py-4 font-semibold">User</th>
-                    <th scope="col" className="px-6 py-4 font-semibold">Status</th>
-                    <th scope="col" className="px-6 py-4 font-semibold hidden sm:table-cell">Charity</th>
-                    <th scope="col" className="px-6 py-4 font-semibold text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-800/50">
-                  {mockUsers.map((user) => (
-                    <tr key={user.id} className="hover:bg-zinc-800/30 transition-colors group">
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col">
-                          <span className="font-medium text-zinc-200">{user.name}</span>
-                          <span className="text-xs text-zinc-500">{user.email}</span>
+              <div className="lg:col-span-2 p-6 rounded-3xl bg-zinc-900 border border-zinc-800 shadow-xl overflow-hidden min-h-[400px]">
+                <h2 className="text-xl font-bold mb-6">Simulation Analysis</h2>
+                {simulationResults ? (
+                  <div className="space-y-8">
+                    <div className="flex justify-center gap-4">
+                      {simulationResults.winning_numbers.map((n, i) => (
+                        <div key={i} className="w-14 h-14 rounded-full bg-zinc-950 border-2 border-violet-500/50 flex items-center justify-center text-xl font-black text-white shadow-[0_0_20px_rgba(139,92,246,0.2)]">
+                          {n}
                         </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        {user.status === "Active" ? (
-                          <div className="flex items-center gap-1.5 text-emerald-400">
-                            <CheckCircle2 size={14} />
-                            <span className="font-medium">Active</span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1.5 text-zinc-500">
-                            <XCircle size={14} />
-                            <span>Inactive</span>
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 hidden sm:table-cell text-zinc-300">
-                        {user.charity}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <button className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-700 transition-colors">
-                          <MoreVertical size={16} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex items-center justify-between mt-6 text-sm text-zinc-500">
-              <span>Showing 5 of 1,245 users</span>
-              <div className="flex gap-2">
-                <button className="px-3 py-1 hover:text-zinc-300 transition-colors">Previous</button>
-                <button className="px-3 py-1 hover:text-zinc-300 transition-colors">Next</button>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="p-6 rounded-2xl bg-black/40 border border-zinc-800 text-center">
+                        <p className="text-zinc-500 text-xs font-bold uppercase mb-2">Match 5</p>
+                        <p className="text-2xl font-black text-white">{simulationResults.winners.match5}</p>
+                        <p className="text-emerald-400 font-bold text-sm mt-1">Pool: ${simulationResults.prize_pools.match5.toFixed(2)}</p>
+                      </div>
+                      <div className="p-6 rounded-2xl bg-black/40 border border-zinc-800 text-center">
+                        <p className="text-zinc-500 text-xs font-bold uppercase mb-2">Match 4</p>
+                        <p className="text-2xl font-black text-white">{simulationResults.winners.match4}</p>
+                        <p className="text-sky-400 font-bold text-sm mt-1">Pool: ${simulationResults.prize_pools.match4.toFixed(2)}</p>
+                      </div>
+                      <div className="p-6 rounded-2xl bg-black/40 border border-zinc-800 text-center">
+                        <p className="text-zinc-500 text-xs font-bold uppercase mb-2">Match 3</p>
+                        <p className="text-2xl font-black text-white">{simulationResults.winners.match3}</p>
+                        <p className="text-amber-400 font-bold text-sm mt-1">Pool: ${simulationResults.prize_pools.match3.toFixed(2)}</p>
+                      </div>
+                    </div>
+                    <div className="p-4 rounded-xl bg-violet-600/5 border border-violet-500/20">
+                      <p className="text-sm text-center text-zinc-400">
+                        Simulation based on **{simulationResults.total_users_checked}** active profiles. 
+                        Rollover of **${simulationResults.prize_pools.rollover_included.toFixed(2)}** included in Match-5 jackpot.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-[300px] gap-3 text-zinc-600">
+                    <Dices size={48} />
+                    <p>Run a simulation to see projected winners and prize distribution.</p>
+                  </div>
+                )}
               </div>
-            </div>
-            
-          </div>
-        </div>
-      </div>
+           </div>
+        )}
 
+        {/* TAB: WINNERS */}
+        {activeTab === "winners" && (
+          <div className="p-6 rounded-3xl bg-zinc-900 border border-zinc-800 shadow-xl overflow-hidden">
+             <h2 className="text-xl font-bold mb-6">Winner Verification System</h2>
+             {isLoading ? <Loader2 className="animate-spin mx-auto my-12" /> : (
+               <div className="overflow-x-auto">
+                 <table className="w-full text-left">
+                   <thead>
+                     <tr className="border-b border-zinc-800 text-xs font-bold uppercase text-zinc-500">
+                       <th className="pb-4 px-4">User</th>
+                       <th className="pb-4 px-4">Draw</th>
+                       <th className="pb-4 px-4">Match</th>
+                       <th className="pb-4 px-4">Prize</th>
+                       <th className="pb-4 px-4">Proof</th>
+                       <th className="pb-4 px-4 text-right">Actions</th>
+                     </tr>
+                   </thead>
+                   <tbody className="divide-y divide-zinc-800/50">
+                     {winners.map(w => (
+                       <tr key={w.id} className="text-sm">
+                         <td className="py-4 px-4">
+                           <div className="font-bold">{w.profiles?.full_name}</div>
+                           <div className="text-xs text-zinc-500">{w.profiles?.email}</div>
+                         </td>
+                         <td className="py-4 px-4">{new Date(w.draws?.month).toLocaleDateString("en-US", { month: "short", year: "numeric" })}</td>
+                         <td className="py-4 px-4">{w.match_type}-Match</td>
+                         <td className="py-4 px-4 font-bold text-emerald-400">${Number(w.prize_amount).toFixed(2)}</td>
+                         <td className="py-4 px-4">
+                           {w.proof_url ? (
+                             <a href={w.proof_url} target="_blank" className="flex items-center gap-1 text-violet-400 hover:text-white">
+                               <ImageIcon size={14} /> View
+                             </a>
+                           ) : <span className="text-zinc-600">No Proof</span>}
+                         </td>
+                         <td className="py-4 px-4 text-right space-x-2">
+                           {w.status === 'pending' && (
+                             <>
+                               <button onClick={() => handleUpdateWinnerStatus(w.id, 'approved')} className="px-3 py-1 bg-emerald-500/10 text-emerald-400 rounded-lg font-bold border border-emerald-500/20">Verify</button>
+                               <button onClick={() => handleUpdateWinnerStatus(w.id, 'rejected')} className="px-3 py-1 bg-rose-500/10 text-rose-400 rounded-lg font-bold border border-rose-500/20">Reject</button>
+                             </>
+                           )}
+                           {w.status === 'approved' && (
+                             <button onClick={() => handleUpdateWinnerStatus(w.id, 'paid')} className="px-3 py-1 bg-violet-600 text-white rounded-lg font-bold">Mark Paid</button>
+                           )}
+                           {w.status === 'paid' && <span className="text-emerald-400 font-bold">✅ Paid</span>}
+                         </td>
+                       </tr>
+                     ))}
+                   </tbody>
+                 </table>
+               </div>
+             )}
+          </div>
+        )}
+
+        {/* TAB: USERS */}
+        {activeTab === "users" && (
+          <div className="p-6 rounded-3xl bg-zinc-900 border border-zinc-800 shadow-xl overflow-hidden">
+             <h2 className="text-xl font-bold mb-6">Subscribers Directory</h2>
+             {isLoading ? <Loader2 className="animate-spin mx-auto my-12" /> : (
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {users.map(u => (
+                    <div key={u.id} className="p-4 rounded-2xl bg-black/40 border border-zinc-800 flex flex-col gap-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="font-bold text-white">{u.full_name}</div>
+                          <div className="text-xs text-zinc-500">{u.email}</div>
+                        </div>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase border ${
+                          u.subscription_status === 'active' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-zinc-800 text-zinc-500 border-zinc-700'
+                        }`}>
+                          {u.subscription_status}
+                        </span>
+                      </div>
+                      <div className="text-xs text-zinc-400 bg-zinc-800/50 p-2 rounded-lg">
+                        <span className="font-bold">Charity:</span> {u.charities?.name || 'None'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+             )}
+          </div>
+        )}
+
+        {/* TAB: CHARITIES */}
+        {activeTab === "charities" && (
+          <div className="p-6 rounded-3xl bg-zinc-900 border border-zinc-800 shadow-xl overflow-hidden">
+             <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold">Charity Management</h2>
+                <button className="px-4 py-2 bg-violet-600 text-white rounded-xl font-bold text-sm">Add Charity</button>
+             </div>
+             {isLoading ? <Loader2 className="animate-spin mx-auto my-12" /> : (
+               <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                 {charities.map(c => (
+                   <div key={c.id} className="bg-black/40 border border-zinc-800 rounded-3xl overflow-hidden">
+                     {c.image_url && <img src={c.image_url} alt={c.name} className="w-full h-32 object-cover opacity-50" />}
+                     <div className="p-4">
+                        <h3 className="font-bold text-white">{c.name}</h3>
+                        <p className="text-xs text-zinc-500 mt-1 line-clamp-2">{c.description}</p>
+                        <div className="mt-4 pt-4 border-t border-zinc-800 flex justify-between items-center">
+                           <span className="text-xs font-bold text-emerald-400">${c.total_raised} raised</span>
+                           <button className="text-zinc-500 hover:text-white"><MoreVertical size={16} /></button>
+                        </div>
+                     </div>
+                   </div>
+                 ))}
+               </div>
+             )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
