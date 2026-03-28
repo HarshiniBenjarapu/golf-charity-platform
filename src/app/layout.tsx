@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GCSP Elevate | Golf Charity Subscription Platform",
+  title: "Golf Charity | Play with Purpose",
   description: "A subscription platform for golf fans to support charities and win prizes.",
 };
 
