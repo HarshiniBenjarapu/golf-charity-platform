@@ -17,7 +17,7 @@ export default async function LoginPage({
           <span className="text-2xl font-bold text-white tracking-widest">GC</span>
         </div>
         <h1 className="text-3xl font-bold bg-gradient-to-r from-zinc-100 to-zinc-400 bg-clip-text text-transparent">
-          GCSP Elevate
+          Golf Charity
         </h1>
       </div>
 

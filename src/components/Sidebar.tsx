@@ -58,9 +58,10 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
             <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-600 shadow-[0_0_15px_rgba(139,92,246,0.3)] transition-all group-hover:shadow-[0_0_20px_rgba(139,92,246,0.5)]">
               <span className="text-lg font-bold text-white tracking-widest">GC</span>
             </div>
-            <span className="text-xl font-semibold bg-gradient-to-r from-zinc-100 to-zinc-400 bg-clip-text text-transparent group-hover:to-zinc-200 transition-all">
-              Elevate
-            </span>
+            <div className="flex flex-col">
+              <span className="text-sm font-bold tracking-tight text-white leading-none">Golf Charity</span>
+              <span className="text-[9px] uppercase tracking-[0.2em] text-violet-400 font-bold mt-0.5">Elevate</span>
+            </div>
           </Link>
           <button 
             onClick={() => setIsOpen(false)}
