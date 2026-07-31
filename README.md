@@ -69,3 +69,9 @@ Prize pools are dynamically calculated at the end of every month:
    ```
 3. Visit `http://localhost:3000/dashboard` to view the Subscriber Interface.
 4. Visit `http://localhost:3000/admin` to view the Admin Draw Management Interface.
+
+Live Demo
+https://golf-charity-platform-jade-ten.vercel.app/
+
+Screenshot
+<img width="771" height="447" alt="project-golf" src="https://github.com/user-attachments/assets/cd5b3d05-96b6-4051-b972-06e46ebc358a" />
